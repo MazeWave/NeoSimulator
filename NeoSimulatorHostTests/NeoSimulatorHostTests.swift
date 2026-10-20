@@ -150,6 +150,22 @@ struct InputFocusTests {
         #expect(NSApp.mainMenu?.performKeyEquivalent(with: editing[3]) == true)
     }
 
+    @Test func commandHeldKeyUpReachesTheNativeInputUntilTheWindowCloses() throws {
+        let display = TestDisplay()
+        let controller = try makeController(display)
+        defer { controller.invalidate() }
+        let window = try #require(controller.window)
+        controller.windowDidBecomeKey(Notification(name: NSWindow.didBecomeKeyNotification, object: window))
+        let keyUp = try #require(NSEvent.keyEvent(with: .keyUp, location: .zero, modifierFlags: .command,
+            timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber, context: nil,
+            characters: "v", charactersIgnoringModifiers: "v", isARepeat: false, keyCode: 9))
+        NSApp.sendEvent(keyUp)
+        #expect(display.input.keyUps.count == 1)
+        controller.windowWillClose(Notification(name: NSWindow.willCloseNotification, object: window))
+        NSApp.sendEvent(keyUp)
+        #expect(display.input.keyUps.count == 1)
+    }
+
     @Test func nativeDisplayKeepsInputIdentityAndChromeActivation() throws {
         _ = NSApplication.shared
         let selection = Process()
@@ -196,9 +212,11 @@ struct InputFocusTests {
 @MainActor
 private final class InputView: NSView {
     var keyDowns: [NSEvent] = []
+    var keyUps: [NSEvent] = []
     var modifiers: [NSEvent] = []
     override var acceptsFirstResponder: Bool { true }
     override func keyDown(with event: NSEvent) { keyDowns.append(event) }
+    override func keyUp(with event: NSEvent) { keyUps.append(event) }
     override func flagsChanged(with event: NSEvent) { modifiers.append(event) }
 }
 @MainActor
